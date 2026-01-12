@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bug Hopper</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Comic Sans MS', cursive, sans-serif;
+    background: #87CEEB;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+
+  #titleScreen {
+    text-align: center;
+  }
+
+  #titleScreen h1 {
+    font-size: 70px;
+    color: #FF4500;
+    text-shadow: 2px 2px 5px #000;
+    margin-bottom: 50px;
+  }
+
+  .menuButton {
+    display: block;
+    margin: 20px auto;
+    padding: 20px 50px;
+    font-size: 25px;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    background: #1E90FF;
+    color: #fff;
+    transition: 0.2s;
+    box-shadow: 2px 2px 5px #000;
+  }
+
+  .menuButton:hover {
+    background: #104E8B;
+  }
+
+  #backBtn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 10px 20px;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    background: #FF4500;
+    color: #fff;
+    box-shadow: 2px 2px 5px #000;
+    display: none; /* hidden until game starts */
+  }
+
+  canvas {
+    display: none; /* hide game initially */
+    background: #87CEEB;
+  }
+</style>
+</head>
+<body>
+
+<!-- Title Screen -->
+<div id="titleScreen">
+  <h1>Bug Hopper</h1>
+  <button class="menuButton" id="playBtn">Play</button>
+  <button class="menuButton" id="howToBtn">How to Play</button>
+  <button class="menuButton" id="creditsBtn">Credits</button>
+</div>
+
+<button id="backBtn">Back</button>
+
+<!-- Game Canvas -->
+<canvas id="gameCanvas" width="800" height="400"></canvas>
+
+<script>
+const titleScreen = document.getElementById("titleScreen");
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const backBtn = document.getElementById("backBtn");
+
+// --- Variables ---
+let player, obstacles, score, lastScoreTime, speed, minObstacleSpacing;
+let gameRunning = false;
+
+// --- Input Handlers ---
+function keyDownHandler(e) {
+  if (e.code === "Space" && player.isGrounded && !player.ducking) {
+    player.velocityY = player.jumpForce;
+    player.isGrounded = false;
+  }
+  if (e.code === "ArrowDown" && player.isGrounded) {
+    player.ducking = true;
+  }
+}
+
+function keyUpHandler(e) {
+  if (e.code === "ArrowDown") player.ducking = false;
+}
+
+// --- Start Game ---
+function startGame() {
+  titleScreen.style.display = "none";
+  canvas.style.display = "block";
+  backBtn.style.display = "block";
+
+  player = {
+    x: 100,
+    y: canvas.height - 80 - 60,
+    width: 30,
+    height: 60,
+    color: "#FF6347",
+    velocityY: 0,
+    jumpForce: -12,
+    gravity: 0.6,
+    ducking: false,
+    isGrounded: true
+  };
+
+  obstacles = [];
+  speed = 6;
+  score = 0;
+  lastScoreTime = Date.now();
+  minObstacleSpacing = 250;
+
+  gameRunning = true;
+
+  // Key events
+  document.addEventListener("keydown", keyDownHandler);
+  document.addEventListener("keyup", keyUpHandler);
+
+  requestAnimationFrame(update);
+}
+
+// --- Restart Game (after death) ---
+function restartGame() {
+  player.x = 100;
+  player.y = canvas.height - 80 - 60;
+  player.velocityY = 0;
+  player.ducking = false;
+  player.isGrounded = true;
+  obstacles = [];
+  score = 0;
+  lastScoreTime = Date.now();
+}
+
+// --- Back to Title ---
+backBtn.addEventListener("click", () => {
+  gameRunning = false;
+  canvas.style.display = "none";
+  backBtn.style.display = "none";
+  titleScreen.style.display = "block";
+
+  // Remove key listeners to prevent duplication
+  document.removeEventListener("keydown", keyDownHandler);
+  document.removeEventListener("keyup", keyUpHandler);
+});
+
+// --- Update Score ---
+function updateScore() {
+  const now = Date.now();
+  if (now - lastScoreTime >= 1000) {
+    score += 1;
+    lastScoreTime = now;
+  }
+
+  ctx.font = "30px Arial";
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 3;
+  ctx.strokeText("Score: " + score, 10, 40);
+  ctx.fillText("Score: " + score, 10, 40);
+}
+
+// --- Game Loop ---
+function update() {
+  if (!gameRunning) return; // stop loop if back button pressed
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // --- Sky ---
+  ctx.fillStyle = "#87CEEB";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // --- Ground ---
+  const groundHeight = 80;
+  ctx.fillStyle = "#654321";
+  ctx.fillRect(0, canvas.height - groundHeight, canvas.width, groundHeight);
+
+  // --- Player Physics ---
+  if (!player.ducking) {
+    player.velocityY += player.gravity;
+    player.y += player.velocityY;
+
+    if (player.y + player.height >= canvas.height - groundHeight) {
+      player.y = canvas.height - groundHeight - player.height;
+      player.velocityY = 0;
+      player.isGrounded = true;
+    } else {
+      player.isGrounded = false;
+    }
+  }
+
+  // --- Draw Player ---
+  const bugHeight = player.ducking ? player.height * 0.5 : player.height;
+  const bugY = player.ducking ? player.y + player.height * 0.5 : player.y;
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  ctx.beginPath();
+  ctx.ellipse(player.x + player.width / 2, canvas.height - groundHeight + 5, player.width / 2, 5, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Body with stripes
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x, bugY, player.width, bugHeight);
+  ctx.fillStyle = "#FFA500";
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(player.x, bugY + i*15, player.width, 5);
+  }
+
+  // Legs
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    ctx.moveTo(player.x + 5, bugY + bugHeight);
+    ctx.quadraticCurveTo(player.x + 0, bugY + bugHeight + 10, player.x + 5, bugY + bugHeight + 15);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.width - 5, bugY + bugHeight);
+    ctx.quadraticCurveTo(player.x + player.width, bugY + bugHeight + 10, player.x + player.width - 5, bugY + bugHeight + 15);
+    ctx.stroke();
+  }
+
+  // Eyes
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(player.x + 7, bugY + 10, 4, 0, Math.PI * 2);
+  ctx.arc(player.x + 23, bugY + 10, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#000";
+  ctx.beginPath();
+  ctx.arc(player.x + 7, bugY + 10, 2, 0, Math.PI * 2);
+  ctx.arc(player.x + 23, bugY + 10, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Antennae
+  ctx.strokeStyle = "#000";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(player.x + 7, bugY + 5);
+  ctx.lineTo(player.x + 2, bugY - 10);
+  ctx.moveTo(player.x + 23, bugY + 5);
+  ctx.lineTo(player.x + 28, bugY - 10);
+  ctx.stroke();
+
+  // --- Spawn obstacles ---
+  if (obstacles.length === 0 || (canvas.width - obstacles[obstacles.length - 1].x) >= minObstacleSpacing) {
+    const type = Math.random() < 0.5 ? "jump" : "duck";
+    if (type === "jump") {
+      obstacles.push({
+        x: canvas.width + Math.random() * 100,
+        y: canvas.height - groundHeight - 40,
+        width: 40,
+        height: 40,
+        type: "jump"
+      });
+    } else {
+      obstacles.push({
+        x: canvas.width + Math.random() * 100,
+        y: player.y,
+        width: 50,
+        height: 30,
+        type: "duck"
+      });
+    }
+  }
+
+  // --- Obstacles update ---
+  obstacles.forEach((obs, index) => {
+    obs.x -= speed;
+
+    // Draw
+    if (obs.type === "jump") {
+      ctx.fillStyle = "#228B22";
+      ctx.beginPath();
+      ctx.moveTo(obs.x + obs.width / 2, obs.y);
+      ctx.quadraticCurveTo(obs.x + obs.width, obs.y + obs.height / 2, obs.x + obs.width / 2, obs.y + obs.height);
+      ctx.quadraticCurveTo(obs.x, obs.y + obs.height / 2, obs.x + obs.width / 2, obs.y);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = "#1E90FF";
+      ctx.beginPath();
+      ctx.moveTo(obs.x, obs.y + obs.height / 2);
+      ctx.lineTo(obs.x + obs.width / 2, obs.y);
+      ctx.lineTo(obs.x + obs.width, obs.y + obs.height / 2);
+      ctx.lineTo(obs.x + obs.width / 2, obs.y + obs.height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Collision
+    const playerTop = bugY;
+    const playerBottom = bugY + bugHeight;
+    const playerLeft = player.x;
+    const playerRight = player.x + player.width;
+
+    if (
+      playerRight > obs.x &&
+      playerLeft < obs.x + obs.width &&
+      playerBottom > obs.y &&
+      playerTop < obs.y + obs.height
+    ) {
+      restartGame(); // Restart game immediately
+    }
+
+    if (obs.x + obs.width < 0) obstacles.splice(index, 1);
+  });
+
+  // --- Update Score ---
+  updateScore();
+
+  requestAnimationFrame(update);
+}
+
+// --- Button Events ---
+document.getElementById("playBtn").addEventListener("click", startGame);
+document.getElementById("howToBtn").addEventListener("click", () => {
+  alert("Use SPACE to jump, ARROW DOWN to duck. Avoid leaves by jumping and birds by ducking!");
+});
+document.getElementById("creditsBtn").addEventListener("click", () => {
+  alert("Bug Hopper by Matty Brown\nPowered by HTML5 Canvas and JavaScript\nInspired by Peter Bug");
+});
+</script>
+</body>
+</html>
